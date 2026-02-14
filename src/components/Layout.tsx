@@ -27,6 +27,7 @@ const navSections: NavSection[] = [
   {
     title: "確定申告",
     items: [
+      { id: "loss-carryforward", label: "繰越損失" },
       { id: "final-statement", label: "青色申告決算書" },
     ],
   },

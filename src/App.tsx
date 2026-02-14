@@ -12,6 +12,7 @@ import ProfitLoss from "./components/ProfitLoss";
 import BalanceSheet from "./components/BalanceSheet";
 import FixedAssetList from "./components/FixedAssetList";
 import RentDetailList from "./components/RentDetailList";
+import LossCarryforwardList from "./components/LossCarryforwardList";
 import FinalStatement from "./components/FinalStatement";
 
 export default function App() {
@@ -97,6 +98,8 @@ export default function App() {
         return <FixedAssetList />;
       case "rent-details":
         return <RentDetailList />;
+      case "loss-carryforward":
+        return <LossCarryforwardList year={year} />;
       case "final-statement":
         return <FinalStatement year={year} />;
     }

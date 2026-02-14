@@ -184,6 +184,59 @@ pub fn delete_rent_detail(state: State<DbState>, id: i64) -> Result<(), String> 
     Ok(())
 }
 
+// ── 純損失の繰越控除 ──
+
+#[tauri::command]
+pub fn get_loss_carryforwards(state: State<DbState>) -> Result<Vec<LossCarryforward>, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::fetch_loss_carryforwards(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_loss_carryforward(
+    state: State<DbState>,
+    loss_year: i32,
+    loss_amount: i64,
+    memo: String,
+) -> Result<i64, String> {
+    if loss_amount <= 0 {
+        return Err("繰越損失額は1円以上を入力してください".to_string());
+    }
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::insert_loss_carryforward(&conn, loss_year, loss_amount, &memo)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_loss_carryforward(
+    state: State<DbState>,
+    id: i64,
+    used_year_1: i64,
+    used_year_2: i64,
+    used_year_3: i64,
+) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::update_loss_carryforward_usage(&conn, id, used_year_1, used_year_2, used_year_3)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_loss_carryforward(state: State<DbState>, id: i64) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::delete_loss_carryforward(&conn, id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_loss_carryforward_summary(
+    state: State<DbState>,
+    year: i32,
+) -> Result<LossCarryforwardSummary, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::calc_loss_carryforward(&conn, year).map_err(|e| e.to_string())
+}
+
 // ── 青色申告決算書（統合） ──
 
 #[tauri::command]

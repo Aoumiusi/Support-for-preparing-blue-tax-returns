@@ -7,6 +7,8 @@ import type {
   BalanceSheet,
   FixedAsset,
   RentDetail,
+  LossCarryforward,
+  LossCarryforwardSummary,
   FinalStatement,
 } from "../types";
 
@@ -152,6 +154,48 @@ export async function addRentDetail(params: {
 
 export async function deleteRentDetail(id: number): Promise<void> {
   return invoke("delete_rent_detail", { id });
+}
+
+// ── 純損失の繰越控除 ──
+
+export async function getLossCarryforwards(): Promise<LossCarryforward[]> {
+  return invoke("get_loss_carryforwards");
+}
+
+export async function addLossCarryforward(params: {
+  lossYear: number;
+  lossAmount: number;
+  memo: string;
+}): Promise<number> {
+  return invoke("add_loss_carryforward", {
+    loss_year: params.lossYear,
+    loss_amount: params.lossAmount,
+    memo: params.memo,
+  });
+}
+
+export async function updateLossCarryforward(params: {
+  id: number;
+  usedYear1: number;
+  usedYear2: number;
+  usedYear3: number;
+}): Promise<void> {
+  return invoke("update_loss_carryforward", {
+    id: params.id,
+    used_year_1: params.usedYear1,
+    used_year_2: params.usedYear2,
+    used_year_3: params.usedYear3,
+  });
+}
+
+export async function deleteLossCarryforward(id: number): Promise<void> {
+  return invoke("delete_loss_carryforward", { id });
+}
+
+export async function getLossCarryforwardSummary(
+  year: number,
+): Promise<LossCarryforwardSummary> {
+  return invoke("get_loss_carryforward_summary", { year });
 }
 
 // ── 青色申告決算書 ──

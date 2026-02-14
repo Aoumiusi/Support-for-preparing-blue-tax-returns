@@ -78,6 +78,7 @@ export default function FinalStatement({ year }: Props) {
 
 function Page1ProfitLoss({ data, year }: { data: FS; year: number }) {
   const pl = data.profit_loss;
+  const lc = data.loss_carryforward;
   const grossProfit = pl.total_revenue - (pl.expense_rows.find(r => r.account_name === "仕入高")?.amount ?? 0);
 
   return (
@@ -173,6 +174,47 @@ function Page1ProfitLoss({ data, year }: { data: FS; year: number }) {
           青色申告特別控除前の所得金額
         </p>
       </div>
+
+      {/* 純損失の繰越控除 */}
+      {lc.total_applied > 0 && (
+        <section>
+          <h4 className="text-sm font-semibold text-indigo-700 border-b border-indigo-200 pb-1 mb-2">
+            純損失の繰越控除
+          </h4>
+          <table className="w-full text-sm">
+            <tbody>
+              {lc.rows.filter(r => r.applied_this_year > 0).map((r) => (
+                <tr key={r.loss_year} className="border-b border-gray-50">
+                  <td className="py-1.5 pl-4">{r.loss_year}年の繰越損失</td>
+                  <td className="py-1.5 text-right tabular-nums w-36 text-green-700">
+                    - {formatYen(r.applied_this_year)}
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-indigo-200 font-semibold bg-indigo-50">
+                <td className="py-2 pl-4">繰越控除額 合計</td>
+                <td className="py-2 text-right tabular-nums w-36 text-green-700">
+                  - {formatYen(lc.total_applied)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="mt-3 rounded-lg border-2 border-indigo-300 bg-indigo-50 p-4 text-center">
+            <p className="text-sm text-gray-600">繰越控除後の所得金額</p>
+            <p className="text-2xl font-bold tabular-nums text-indigo-700">
+              {formatYen(lc.income_after)}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {pl.net_income < 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          当年度は純損失 {formatYen(Math.abs(pl.net_income))} が発生しています。
+          「繰越損失」ページで登録すると、翌年以降3年間の所得から控除できます。
+        </div>
+      )}
     </div>
   );
 }

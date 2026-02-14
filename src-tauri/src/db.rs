@@ -5,6 +5,7 @@ use crate::models::*;
 
 const MIGRATION_001: &str = include_str!("../migrations/001_init.sql");
 const MIGRATION_002: &str = include_str!("../migrations/002_financial_statements.sql");
+const MIGRATION_003: &str = include_str!("../migrations/003_loss_carryforward.sql");
 
 pub fn get_db_path(app_handle: &tauri::AppHandle) -> PathBuf {
     let app_dir = app_handle
@@ -20,6 +21,7 @@ pub fn init_db(path: &PathBuf) -> SqlResult<Connection> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
     conn.execute_batch(MIGRATION_001)?;
     conn.execute_batch(MIGRATION_002)?;
+    conn.execute_batch(MIGRATION_003)?;
     Ok(conn)
 }
 
@@ -538,6 +540,160 @@ pub fn calc_monthly_sales_purchases(conn: &Connection, year: i32) -> SqlResult<V
     Ok(result)
 }
 
+// ── 純損失の繰越控除 ──
+
+pub fn fetch_loss_carryforwards(conn: &Connection) -> SqlResult<Vec<LossCarryforward>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, loss_year, loss_amount, used_year_1, used_year_2, used_year_3, memo
+         FROM loss_carryforward ORDER BY loss_year",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(LossCarryforward {
+            id: row.get(0)?,
+            loss_year: row.get(1)?,
+            loss_amount: row.get(2)?,
+            used_year_1: row.get(3)?,
+            used_year_2: row.get(4)?,
+            used_year_3: row.get(5)?,
+            memo: row.get(6)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn insert_loss_carryforward(
+    conn: &Connection,
+    loss_year: i32,
+    loss_amount: i64,
+    memo: &str,
+) -> SqlResult<i64> {
+    conn.execute(
+        "INSERT INTO loss_carryforward (loss_year, loss_amount, memo)
+         VALUES (?1, ?2, ?3)",
+        params![loss_year, loss_amount, memo],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn update_loss_carryforward_usage(
+    conn: &Connection,
+    id: i64,
+    used_year_1: i64,
+    used_year_2: i64,
+    used_year_3: i64,
+) -> SqlResult<usize> {
+    conn.execute(
+        "UPDATE loss_carryforward SET used_year_1 = ?1, used_year_2 = ?2, used_year_3 = ?3
+         WHERE id = ?4",
+        params![used_year_1, used_year_2, used_year_3, id],
+    )
+}
+
+pub fn delete_loss_carryforward(conn: &Connection, id: i64) -> SqlResult<usize> {
+    conn.execute("DELETE FROM loss_carryforward WHERE id = ?1", params![id])
+}
+
+/// 当期（target_year）に適用可能な繰越損失を計算する
+/// 青色申告の場合、過去3年分の純損失を当期の所得から控除できる
+pub fn calc_loss_carryforward(conn: &Connection, year: i32) -> SqlResult<LossCarryforwardSummary> {
+    let pl = calc_profit_loss(conn, year)?;
+    let income_before = pl.net_income;
+
+    // 所得が0以下なら繰越控除の適用なし
+    if income_before <= 0 {
+        return Ok(LossCarryforwardSummary {
+            rows: Vec::new(),
+            total_applied: 0,
+            income_before,
+            income_after: income_before,
+        });
+    }
+
+    // 過去3年分の繰越損失を取得（古い年度から順に控除）
+    let mut stmt = conn.prepare(
+        "SELECT id, loss_year, loss_amount, used_year_1, used_year_2, used_year_3, memo
+         FROM loss_carryforward
+         WHERE loss_year >= ?1 AND loss_year <= ?2
+         ORDER BY loss_year",
+    )?;
+    let losses: Vec<LossCarryforward> = stmt
+        .query_map(params![year - 3, year - 1], |row| {
+            Ok(LossCarryforward {
+                id: row.get(0)?,
+                loss_year: row.get(1)?,
+                loss_amount: row.get(2)?,
+                used_year_1: row.get(3)?,
+                used_year_2: row.get(4)?,
+                used_year_3: row.get(5)?,
+                memo: row.get(6)?,
+            })
+        })?
+        .collect::<SqlResult<Vec<_>>>()?;
+
+    let mut remaining_income = income_before;
+    let mut rows = Vec::new();
+    let mut total_applied: i64 = 0;
+
+    for loss in &losses {
+        if remaining_income <= 0 {
+            break;
+        }
+
+        let already_used = loss.used_year_1 + loss.used_year_2 + loss.used_year_3;
+        let available = loss.loss_amount - already_used;
+
+        if available <= 0 {
+            continue;
+        }
+
+        // 当期に繰越年度として何年目か判定
+        let offset = year - loss.loss_year; // 1, 2, or 3
+        if offset < 1 || offset > 3 {
+            continue;
+        }
+
+        // その年度枠で既に使用済みの金額を確認
+        let used_this_slot = match offset {
+            1 => loss.used_year_1,
+            2 => loss.used_year_2,
+            3 => loss.used_year_3,
+            _ => 0,
+        };
+
+        // この年度枠ではまだ未使用の場合のみ適用
+        if used_this_slot > 0 {
+            // 既にこの年度枠で使用済み
+            rows.push(LossCarryforwardApplied {
+                loss_year: loss.loss_year,
+                original_loss: loss.loss_amount,
+                already_used,
+                applied_this_year: 0,
+                remaining: available,
+            });
+            continue;
+        }
+
+        let apply = std::cmp::min(available, remaining_income);
+        remaining_income -= apply;
+        total_applied += apply;
+
+        rows.push(LossCarryforwardApplied {
+            loss_year: loss.loss_year,
+            original_loss: loss.loss_amount,
+            already_used,
+            applied_this_year: apply,
+            remaining: available - apply,
+        });
+    }
+
+    Ok(LossCarryforwardSummary {
+        rows,
+        total_applied,
+        income_before,
+        income_after: income_before - total_applied,
+    })
+}
+
 // ── 青色申告決算書（統合データ） ──
 
 pub fn calc_final_statement(conn: &Connection, year: i32) -> SqlResult<FinalStatement> {
@@ -546,6 +702,7 @@ pub fn calc_final_statement(conn: &Connection, year: i32) -> SqlResult<FinalStat
     let monthly = calc_monthly_sales_purchases(conn, year)?;
     let dep_rows = calc_depreciation(conn, year)?;
     let rents = fetch_rent_details(conn)?;
+    let loss_cf = calc_loss_carryforward(conn, year)?;
 
     let annual_sales_total: i64 = monthly.iter().map(|m| m.sales).sum();
     let annual_purchases_total: i64 = monthly.iter().map(|m| m.purchases).sum();
@@ -562,5 +719,6 @@ pub fn calc_final_statement(conn: &Connection, year: i32) -> SqlResult<FinalStat
         rent_details: rents,
         rent_total,
         balance_sheet: bs,
+        loss_carryforward: loss_cf,
     })
 }

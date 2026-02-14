@@ -45,6 +45,38 @@ pub struct RentDetail {
     pub memo: String,
 }
 
+// ── 純損失の繰越控除 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LossCarryforward {
+    pub id: i64,
+    pub loss_year: i32,
+    pub loss_amount: i64,
+    pub used_year_1: i64,
+    pub used_year_2: i64,
+    pub used_year_3: i64,
+    pub memo: String,
+}
+
+/// 当期に適用可能な繰越損失の明細行
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LossCarryforwardApplied {
+    pub loss_year: i32,
+    pub original_loss: i64,
+    pub already_used: i64,
+    pub applied_this_year: i64,
+    pub remaining: i64,
+}
+
+/// 繰越控除の計算結果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LossCarryforwardSummary {
+    pub rows: Vec<LossCarryforwardApplied>,
+    pub total_applied: i64,
+    pub income_before: i64,
+    pub income_after: i64,
+}
+
 // ── 月別集計 ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +99,7 @@ pub struct FinalStatement {
     pub rent_details: Vec<RentDetail>,
     pub rent_total: i64,
     pub balance_sheet: BalanceSheet,
+    pub loss_carryforward: LossCarryforwardSummary,
 }
 
 // ── 勘定科目 ──

@@ -111,6 +111,32 @@ export interface RentDetail {
   memo: string;
 }
 
+// 純損失の繰越控除
+export interface LossCarryforward {
+  id: number;
+  loss_year: number;
+  loss_amount: number;
+  used_year_1: number;
+  used_year_2: number;
+  used_year_3: number;
+  memo: string;
+}
+
+export interface LossCarryforwardApplied {
+  loss_year: number;
+  original_loss: number;
+  already_used: number;
+  applied_this_year: number;
+  remaining: number;
+}
+
+export interface LossCarryforwardSummary {
+  rows: LossCarryforwardApplied[];
+  total_applied: number;
+  income_before: number;
+  income_after: number;
+}
+
 // 月別売上・仕入
 export interface MonthlySalesPurchase {
   month: number;
@@ -129,6 +155,7 @@ export interface FinalStatement {
   rent_details: RentDetail[];
   rent_total: number;
   balance_sheet: BalanceSheet;
+  loss_carryforward: LossCarryforwardSummary;
 }
 
 // ナビゲーション
@@ -140,4 +167,5 @@ export type PageId =
   | "balance-sheet"
   | "fixed-assets"
   | "rent-details"
+  | "loss-carryforward"
   | "final-statement";
