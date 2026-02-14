@@ -139,4 +139,5 @@ export type PageId =
   | "profit-loss"
   | "balance-sheet"
   | "fixed-assets"
+  | "rent-details"
   | "final-statement";

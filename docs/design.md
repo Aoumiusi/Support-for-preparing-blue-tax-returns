@@ -131,7 +131,39 @@ CREATE TABLE journal_entries (
 );
 ```
 
-### 3.3 ER 図
+### 3.3 固定資産台帳テーブル (`fixed_assets`)
+
+減価償却費の計算に使用します（決算書 第3面）。
+
+| カラム名 | 型 | 説明 |
+|---|---|---|
+| `id` | INTEGER (PK) | 内部ID |
+| `name` | TEXT | 資産名称 |
+| `acquisition_date` | TEXT | 取得年月日 (YYYY-MM-DD) |
+| `acquisition_cost` | INTEGER | 取得価額（円） |
+| `useful_life` | INTEGER | 耐用年数 |
+| `depreciation_method` | TEXT | 償却方法（定額法/定率法） |
+| `depreciation_rate` | INTEGER | 償却率（×10000） |
+| `accumulated_dep` | INTEGER | 前年末までの償却累計額 |
+| `memo` | TEXT | 備考 |
+| `is_active` | INTEGER | 有効フラグ（1=有効, 0=除却済み） |
+
+### 3.4 地代家賃内訳テーブル (`rent_details`)
+
+決算書 第3面の地代家賃内訳に使用します。
+
+| カラム名 | 型 | 説明 |
+|---|---|---|
+| `id` | INTEGER (PK) | 内部ID |
+| `payee_address` | TEXT | 支払先の住所 |
+| `payee_name` | TEXT | 支払先の氏名 |
+| `rent_type` | TEXT | 賃借物件（事務所/店舗 等） |
+| `monthly_rent` | INTEGER | 月額家賃（円） |
+| `annual_total` | INTEGER | 年間支払額（円） |
+| `business_ratio` | INTEGER | 事業割合（%, 1-100） |
+| `memo` | TEXT | 備考 |
+
+### 3.5 ER 図
 
 ```
 accounts                    journal_entries
@@ -145,6 +177,18 @@ accounts                    journal_entries
                        │   │ description           │
                        │   │ created_at            │
                        │   └──────────────────────┘
+
+fixed_assets                rent_details
+┌──────────────────┐       ┌──────────────────────┐
+│ id (PK)          │       │ id (PK)              │
+│ name             │       │ payee_address        │
+│ acquisition_date │       │ payee_name           │
+│ acquisition_cost │       │ rent_type            │
+│ useful_life      │       │ monthly_rent         │
+│ depreciation_*   │       │ annual_total         │
+│ accumulated_dep  │       │ business_ratio       │
+│ is_active        │       │ memo                 │
+└──────────────────┘       └──────────────────────┘
 ```
 
 ---
@@ -184,42 +228,33 @@ accounts                    journal_entries
 
 期間内の収益と費用を集計し、当期純利益（損失）を算出します。
 
-```
-損益計算書
-──────────────────────────
-【収益の部】
-  売上高           ¥XXX,XXX
-──────────────────────────
-【費用の部】
-  仕入高           ¥XXX,XXX
-  給料賃金         ¥XXX,XXX
-  地代家賃         ¥XXX,XXX
-  通信費           ¥XXX,XXX
-  ...
-  費用合計         ¥XXX,XXX
-──────────────────────────
-  当期純利益       ¥XXX,XXX
-```
-
 #### 貸借対照表 (B/S)
 
 期末時点の資産・負債・純資産の状態を表示します。
 
-```
-貸借対照表
-──────────────────────────────────────
-【資産の部】          │【負債の部】
-  現金     ¥XXX,XXX  │  買掛金   ¥XXX,XXX
-  普通預金 ¥XXX,XXX  │  未払金   ¥XXX,XXX
-  売掛金   ¥XXX,XXX  │  負債合計 ¥XXX,XXX
-  ...                │──────────────────
-  資産合計 ¥XXX,XXX  │【純資産の部】
-                     │  元入金   ¥XXX,XXX
-                     │  当期純利益¥XXX,XXX
-                     │  純資産合計¥XXX,XXX
-──────────────────────────────────────
-  合計     ¥XXX,XXX  │  合計     ¥XXX,XXX
-```
+### 4.4 固定資産管理
+
+- **固定資産台帳**: 資産名、取得日、取得価額、耐用年数、償却率を登録
+- **減価償却の自動計算**: 定額法に対応、取得初年度の月割り計算、備忘価額（1円）の考慮
+
+### 4.5 地代家賃内訳管理
+
+- 支払先の住所・氏名、賃借物件の種類を記録
+- 月額・年額・事業割合から必要経費算入額を自動計算
+
+### 4.6 青色申告決算書（一般用）
+
+国税庁の公式フォーマットに準拠した4ページ構成の決算書を生成します。
+
+| ページ | 内容 |
+|---|---|
+| **第1面** | 損益計算書（収益・売上原価・経費・所得金額） |
+| **第2面** | 月別売上（収入）金額及び仕入金額（12ヶ月分の推移） |
+| **第3面** | 減価償却費の計算 / 地代家賃の内訳 |
+| **第4面** | 貸借対照表（資産・負債・純資産 + 貸借一致チェック） |
+
+- 印刷対応（`window.print()`、印刷用CSS適用）
+- 仕訳データ・固定資産台帳・地代家賃内訳から全自動で集計
 
 ---
 
@@ -273,7 +308,41 @@ fn get_profit_loss(year: i32) -> Result<ProfitLoss, String>
 fn get_balance_sheet(year: i32) -> Result<BalanceSheet, String>
 
 #[tauri::command]
-fn export_csv(report_type: String, year: i32) -> Result<String, String>
+fn export_journal_csv(year: i32, month: Option<i32>) -> Result<String, String>
+```
+
+### 5.4 固定資産
+
+```rust
+#[tauri::command]
+fn get_fixed_assets() -> Result<Vec<FixedAsset>, String>
+
+#[tauri::command]
+fn add_fixed_asset(...) -> Result<i64, String>
+
+#[tauri::command]
+fn delete_fixed_asset(id: i64) -> Result<(), String>
+```
+
+### 5.5 地代家賃内訳
+
+```rust
+#[tauri::command]
+fn get_rent_details() -> Result<Vec<RentDetail>, String>
+
+#[tauri::command]
+fn add_rent_detail(...) -> Result<i64, String>
+
+#[tauri::command]
+fn delete_rent_detail(id: i64) -> Result<(), String>
+```
+
+### 5.6 青色申告決算書
+
+```rust
+#[tauri::command]
+fn get_final_statement(year: i32) -> Result<FinalStatement, String>
+// P/L, B/S, 月別売上仕入, 減価償却, 地代家賃を統合して返す
 ```
 
 ---
@@ -315,34 +384,42 @@ let amount: i64 = 1000; // 単位: 円
 
 ### Phase 1: 環境構築
 
-- [ ] `rustup`, `node.js`, `tauri-cli` のセットアップ
-- [ ] プロジェクト初期化 (`npm create tauri-app`)
+- [x] `rustup`, `node.js`, `tauri-cli` のセットアップ
+- [x] プロジェクト初期化 (Vite + React + TypeScript + Tailwind CSS)
 - [ ] 開発ツールチェインの設定 (ESLint, Prettier, Clippy)
 
 ### Phase 2: データ基盤実装
 
-- [ ] SQLite データベースの初期化スクリプト作成
-- [ ] `accounts` テーブルの CRUD 実装
-- [ ] `journal_entries` テーブルの CRUD 実装
-- [ ] Rust 側での Tauri コマンド実装 (`add_entry`, `get_entries`)
+- [x] SQLite データベースの初期化スクリプト作成（初期勘定科目39科目）
+- [x] `accounts` テーブルの CRUD 実装
+- [x] `journal_entries` テーブルの CRUD 実装
+- [x] `fixed_assets` テーブルの CRUD 実装
+- [x] `rent_details` テーブルの CRUD 実装
+- [x] Rust 側での Tauri コマンド実装（18コマンド）
 
 ### Phase 3: UI 実装
 
-- [ ] 仕訳入力フォームの作成
-- [ ] 勘定科目選択ドロップダウンの実装
-- [ ] 仕訳帳一覧画面の作成
-- [ ] テンプレート入力機能
+- [x] 仕訳入力フォームの作成（テンプレート5種対応）
+- [x] 勘定科目選択ドロップダウンの実装
+- [x] 仕訳帳一覧画面の作成（月別フィルタ、削除、CSV出力）
+- [x] 勘定科目管理画面（分類別表示、科目追加）
+- [x] 固定資産台帳画面（耐用年数・償却率プリセット付き）
+- [x] 地代家賃内訳管理画面（月額→年額自動計算、事業割合）
 
-### Phase 4: 集計ロジック
+### Phase 4: 集計ロジック・決算書
 
-- [ ] 試算表 (T/B) の集計アルゴリズム実装
-- [ ] 貸借対照表 (B/S) の自動生成
-- [ ] 損益計算書 (P/L) の自動生成
-- [ ] CSV エクスポート機能の追加
+- [x] 試算表 (T/B) の集計アルゴリズム実装（月次/年次）
+- [x] 貸借対照表 (B/S) の自動生成（貸借一致チェック付き）
+- [x] 損益計算書 (P/L) の自動生成
+- [x] 月別売上・仕入集計の実装
+- [x] 減価償却費の自動計算（定額法、月割り対応、備忘価額）
+- [x] 青色申告決算書（4ページ構成）の統合UI
+- [x] CSV エクスポート機能（BOM付きUTF-8）
+- [x] バックアップ機能
 
 ### Phase 5: 品質向上
 
-- [ ] バックアップ / リストア機能
+- [ ] リストア機能
 - [ ] データバリデーションの強化
 - [ ] UI/UX の改善・レスポンシブ対応
 - [ ] 単体テスト・結合テストの整備

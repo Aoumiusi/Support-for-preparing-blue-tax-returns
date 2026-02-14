@@ -26,3 +26,43 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* 印刷用スタイル（決算書印刷時） */
+@media print {
+  header,
+  nav {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .flex.h-screen {
+    display: block !important;
+    height: auto !important;
+  }
+
+  .flex-1.overflow-auto {
+    overflow: visible !important;
+  }
+
+  body {
+    font-size: 11px;
+    background: white;
+    color: black;
+  }
+
+  table {
+    page-break-inside: avoid;
+  }
+
+  .shadow-sm {
+    box-shadow: none !important;
+  }
+
+  .border {
+    border-color: #999 !important;
+  }
+}
