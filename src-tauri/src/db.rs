@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use crate::models::*;
 
-const MIGRATION_SQL: &str = include_str!("../migrations/001_init.sql");
+const MIGRATION_001: &str = include_str!("../migrations/001_init.sql");
+const MIGRATION_002: &str = include_str!("../migrations/002_financial_statements.sql");
 
 pub fn get_db_path(app_handle: &tauri::AppHandle) -> PathBuf {
     let app_dir = app_handle
@@ -17,7 +18,8 @@ pub fn get_db_path(app_handle: &tauri::AppHandle) -> PathBuf {
 pub fn init_db(path: &PathBuf) -> SqlResult<Connection> {
     let conn = Connection::open(path)?;
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-    conn.execute_batch(MIGRATION_SQL)?;
+    conn.execute_batch(MIGRATION_001)?;
+    conn.execute_batch(MIGRATION_002)?;
     Ok(conn)
 }
 
@@ -329,5 +331,236 @@ pub fn calc_balance_sheet(conn: &Connection, year: i32) -> SqlResult<BalanceShee
         total_liabilities,
         total_equity,
         net_income: pl.net_income,
+    })
+}
+
+// ── 固定資産 ──
+
+pub fn fetch_fixed_assets(conn: &Connection) -> SqlResult<Vec<FixedAsset>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, acquisition_date, acquisition_cost, useful_life,
+                depreciation_method, depreciation_rate, accumulated_dep, memo, is_active
+         FROM fixed_assets ORDER BY acquisition_date",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let active_flag: i32 = row.get(9)?;
+        Ok(FixedAsset {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            acquisition_date: row.get(2)?,
+            acquisition_cost: row.get(3)?,
+            useful_life: row.get(4)?,
+            depreciation_method: row.get(5)?,
+            depreciation_rate: row.get(6)?,
+            accumulated_dep: row.get(7)?,
+            memo: row.get(8)?,
+            is_active: active_flag != 0,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn insert_fixed_asset(
+    conn: &Connection,
+    name: &str,
+    acquisition_date: &str,
+    acquisition_cost: i64,
+    useful_life: i32,
+    depreciation_method: &str,
+    depreciation_rate: i32,
+    accumulated_dep: i64,
+    memo: &str,
+) -> SqlResult<i64> {
+    conn.execute(
+        "INSERT INTO fixed_assets (name, acquisition_date, acquisition_cost, useful_life,
+                depreciation_method, depreciation_rate, accumulated_dep, memo)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![name, acquisition_date, acquisition_cost, useful_life,
+                depreciation_method, depreciation_rate, accumulated_dep, memo],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn delete_fixed_asset(conn: &Connection, id: i64) -> SqlResult<usize> {
+    conn.execute("DELETE FROM fixed_assets WHERE id = ?1", params![id])
+}
+
+/// 当期の減価償却費を計算する
+pub fn calc_depreciation(conn: &Connection, year: i32) -> SqlResult<Vec<DepreciationRow>> {
+    let assets = fetch_fixed_assets(conn)?;
+    let mut rows = Vec::new();
+
+    for asset in assets {
+        if !asset.is_active {
+            continue;
+        }
+        // 取得年を判定し、取得初年度の月割り計算
+        let acq_year: i32 = asset.acquisition_date[..4].parse().unwrap_or(year);
+        let acq_month: i32 = asset.acquisition_date[5..7].parse().unwrap_or(1);
+
+        // 取得年より前の年度は対象外
+        if year < acq_year {
+            continue;
+        }
+
+        let remaining = asset.acquisition_cost - asset.accumulated_dep;
+        if remaining <= 1 {
+            // 備忘価額（1円）到達済み
+            continue;
+        }
+
+        // 定額法: 取得価額 × 償却率 (depreciation_rate は ×10000)
+        let mut dep = (asset.acquisition_cost as i128 * asset.depreciation_rate as i128 / 10000) as i64;
+
+        // 取得初年度は月割り（取得月から12月までの月数 / 12）
+        if year == acq_year {
+            let months = 12 - acq_month + 1;
+            dep = dep * months as i64 / 12;
+        }
+
+        // 備忘価額1円を残す
+        if asset.accumulated_dep + dep >= asset.acquisition_cost {
+            dep = asset.acquisition_cost - asset.accumulated_dep - 1;
+        }
+        if dep < 0 {
+            dep = 0;
+        }
+
+        let accumulated_end = asset.accumulated_dep + dep;
+        let book_value_end = asset.acquisition_cost - accumulated_end;
+
+        rows.push(DepreciationRow {
+            asset_id: asset.id,
+            asset_name: asset.name,
+            acquisition_date: asset.acquisition_date,
+            acquisition_cost: asset.acquisition_cost,
+            depreciation_method: asset.depreciation_method,
+            useful_life: asset.useful_life,
+            depreciation_rate: asset.depreciation_rate,
+            accumulated_dep_prev: asset.accumulated_dep,
+            current_year_dep: dep,
+            accumulated_dep_end: accumulated_end,
+            book_value_end,
+        });
+    }
+    Ok(rows)
+}
+
+// ── 地代家賃内訳 ──
+
+pub fn fetch_rent_details(conn: &Connection) -> SqlResult<Vec<RentDetail>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, payee_address, payee_name, rent_type, monthly_rent,
+                annual_total, business_ratio, memo
+         FROM rent_details ORDER BY id",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(RentDetail {
+            id: row.get(0)?,
+            payee_address: row.get(1)?,
+            payee_name: row.get(2)?,
+            rent_type: row.get(3)?,
+            monthly_rent: row.get(4)?,
+            annual_total: row.get(5)?,
+            business_ratio: row.get(6)?,
+            memo: row.get(7)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn insert_rent_detail(
+    conn: &Connection,
+    payee_address: &str,
+    payee_name: &str,
+    rent_type: &str,
+    monthly_rent: i64,
+    annual_total: i64,
+    business_ratio: i32,
+    memo: &str,
+) -> SqlResult<i64> {
+    conn.execute(
+        "INSERT INTO rent_details (payee_address, payee_name, rent_type, monthly_rent,
+                annual_total, business_ratio, memo)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![payee_address, payee_name, rent_type, monthly_rent, annual_total, business_ratio, memo],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn delete_rent_detail(conn: &Connection, id: i64) -> SqlResult<usize> {
+    conn.execute("DELETE FROM rent_details WHERE id = ?1", params![id])
+}
+
+// ── 月別売上・仕入 ──
+
+pub fn calc_monthly_sales_purchases(conn: &Connection, year: i32) -> SqlResult<Vec<MonthlySalesPurchase>> {
+    // 売上 = 貸方に売上高(4100)が使われた仕訳の金額
+    // 仕入 = 借方に仕入高(5100)が使われた仕訳の金額
+    let sql = "
+        SELECT
+            CAST(substr(j.date, 6, 2) AS INTEGER) AS month,
+            COALESCE(SUM(CASE WHEN ca.code = 4100 THEN j.credit_amount ELSE 0 END), 0) AS sales,
+            COALESCE(SUM(CASE WHEN da.code = 5100 THEN j.debit_amount ELSE 0 END), 0) AS purchases
+        FROM journal_entries j
+        JOIN accounts da ON da.id = j.debit_account_id
+        JOIN accounts ca ON ca.id = j.credit_account_id
+        WHERE j.date >= ?1 AND j.date <= ?2
+        GROUP BY month
+        ORDER BY month";
+
+    let date_from = format!("{:04}-01-01", year);
+    let date_to = format!("{:04}-12-31", year);
+
+    let mut stmt = conn.prepare(sql)?;
+    let existing: Vec<MonthlySalesPurchase> = stmt
+        .query_map(params![date_from, date_to], |row| {
+            Ok(MonthlySalesPurchase {
+                month: row.get(0)?,
+                sales: row.get(1)?,
+                purchases: row.get(2)?,
+            })
+        })?
+        .collect::<SqlResult<Vec<_>>>()?;
+
+    // 12ヶ月分を埋める
+    let mut result: Vec<MonthlySalesPurchase> = (1..=12)
+        .map(|m| {
+            existing
+                .iter()
+                .find(|r| r.month == m)
+                .cloned()
+                .unwrap_or(MonthlySalesPurchase { month: m, sales: 0, purchases: 0 })
+        })
+        .collect();
+    // result は必ず12要素
+    let _ = &mut result; // suppress unused warning
+    Ok(result)
+}
+
+// ── 青色申告決算書（統合データ） ──
+
+pub fn calc_final_statement(conn: &Connection, year: i32) -> SqlResult<FinalStatement> {
+    let pl = calc_profit_loss(conn, year)?;
+    let bs = calc_balance_sheet(conn, year)?;
+    let monthly = calc_monthly_sales_purchases(conn, year)?;
+    let dep_rows = calc_depreciation(conn, year)?;
+    let rents = fetch_rent_details(conn)?;
+
+    let annual_sales_total: i64 = monthly.iter().map(|m| m.sales).sum();
+    let annual_purchases_total: i64 = monthly.iter().map(|m| m.purchases).sum();
+    let depreciation_total: i64 = dep_rows.iter().map(|d| d.current_year_dep).sum();
+    let rent_total: i64 = rents.iter().map(|r| r.annual_total * r.business_ratio as i64 / 100).sum();
+
+    Ok(FinalStatement {
+        profit_loss: pl,
+        monthly,
+        annual_sales_total,
+        annual_purchases_total,
+        depreciation_rows: dep_rows,
+        depreciation_total,
+        rent_details: rents,
+        rent_total,
+        balance_sheet: bs,
     })
 }

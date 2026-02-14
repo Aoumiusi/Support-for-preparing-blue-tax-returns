@@ -1,12 +1,34 @@
 import { type ReactNode } from "react";
 import type { PageId } from "../types";
 
-const navItems: { id: PageId; label: string }[] = [
-  { id: "journal", label: "仕訳帳" },
-  { id: "accounts", label: "勘定科目" },
-  { id: "trial-balance", label: "試算表" },
-  { id: "profit-loss", label: "損益計算書" },
-  { id: "balance-sheet", label: "貸借対照表" },
+interface NavSection {
+  title: string;
+  items: { id: PageId; label: string }[];
+}
+
+const navSections: NavSection[] = [
+  {
+    title: "記帳",
+    items: [
+      { id: "journal", label: "仕訳帳" },
+      { id: "accounts", label: "勘定科目" },
+      { id: "fixed-assets", label: "固定資産台帳" },
+    ],
+  },
+  {
+    title: "帳簿",
+    items: [
+      { id: "trial-balance", label: "試算表" },
+      { id: "profit-loss", label: "損益計算書" },
+      { id: "balance-sheet", label: "貸借対照表" },
+    ],
+  },
+  {
+    title: "確定申告",
+    items: [
+      { id: "final-statement", label: "青色申告決算書" },
+    ],
+  },
 ];
 
 interface LayoutProps {
@@ -54,23 +76,30 @@ export default function Layout({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <nav className="w-52 shrink-0 border-r border-gray-200 bg-white">
-          <ul className="py-2">
-            {navItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => onNavigate(item.id)}
-                  className={`w-full px-6 py-3 text-left text-sm transition ${
-                    currentPage === item.id
-                      ? "bg-primary-50 font-semibold text-primary-700 border-r-2 border-primary-700"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <nav className="w-52 shrink-0 border-r border-gray-200 bg-white overflow-y-auto print:hidden">
+          {navSections.map((section) => (
+            <div key={section.title}>
+              <p className="px-6 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                {section.title}
+              </p>
+              <ul>
+                {section.items.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      onClick={() => onNavigate(item.id)}
+                      className={`w-full px-6 py-2.5 text-left text-sm transition ${
+                        currentPage === item.id
+                          ? "bg-primary-50 font-semibold text-primary-700 border-r-2 border-primary-700"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </nav>
 
         {/* Main content */}

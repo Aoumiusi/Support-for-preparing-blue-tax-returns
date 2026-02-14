@@ -1,5 +1,76 @@
 use serde::{Deserialize, Serialize};
 
+// ── 固定資産 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FixedAsset {
+    pub id: i64,
+    pub name: String,
+    pub acquisition_date: String,
+    pub acquisition_cost: i64,
+    pub useful_life: i32,
+    pub depreciation_method: String,
+    pub depreciation_rate: i32,
+    pub accumulated_dep: i64,
+    pub memo: String,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepreciationRow {
+    pub asset_id: i64,
+    pub asset_name: String,
+    pub acquisition_date: String,
+    pub acquisition_cost: i64,
+    pub depreciation_method: String,
+    pub useful_life: i32,
+    pub depreciation_rate: i32,
+    pub accumulated_dep_prev: i64,
+    pub current_year_dep: i64,
+    pub accumulated_dep_end: i64,
+    pub book_value_end: i64,
+}
+
+// ── 地代家賃内訳 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RentDetail {
+    pub id: i64,
+    pub payee_address: String,
+    pub payee_name: String,
+    pub rent_type: String,
+    pub monthly_rent: i64,
+    pub annual_total: i64,
+    pub business_ratio: i32,
+    pub memo: String,
+}
+
+// ── 月別集計 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonthlySalesPurchase {
+    pub month: i32,
+    pub sales: i64,
+    pub purchases: i64,
+}
+
+// ── 青色申告決算書（統合） ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FinalStatement {
+    pub profit_loss: ProfitLoss,
+    pub monthly: Vec<MonthlySalesPurchase>,
+    pub annual_sales_total: i64,
+    pub annual_purchases_total: i64,
+    pub depreciation_rows: Vec<DepreciationRow>,
+    pub depreciation_total: i64,
+    pub rent_details: Vec<RentDetail>,
+    pub rent_total: i64,
+    pub balance_sheet: BalanceSheet,
+}
+
+// ── 勘定科目 ──
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
     pub id: i64,

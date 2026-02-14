@@ -5,6 +5,9 @@ import type {
   TrialBalance,
   ProfitLoss,
   BalanceSheet,
+  FixedAsset,
+  RentDetail,
+  FinalStatement,
 } from "../types";
 
 // ── 勘定科目 ──
@@ -87,6 +90,76 @@ export async function getProfitLoss(year: number): Promise<ProfitLoss> {
 
 export async function getBalanceSheet(year: number): Promise<BalanceSheet> {
   return invoke("get_balance_sheet", { year });
+}
+
+// ── 固定資産 ──
+
+export async function getFixedAssets(): Promise<FixedAsset[]> {
+  return invoke("get_fixed_assets");
+}
+
+export async function addFixedAsset(params: {
+  name: string;
+  acquisitionDate: string;
+  acquisitionCost: number;
+  usefulLife: number;
+  depreciationMethod: string;
+  depreciationRate: number;
+  accumulatedDep: number;
+  memo: string;
+}): Promise<number> {
+  return invoke("add_fixed_asset", {
+    name: params.name,
+    acquisition_date: params.acquisitionDate,
+    acquisition_cost: params.acquisitionCost,
+    useful_life: params.usefulLife,
+    depreciation_method: params.depreciationMethod,
+    depreciation_rate: params.depreciationRate,
+    accumulated_dep: params.accumulatedDep,
+    memo: params.memo,
+  });
+}
+
+export async function deleteFixedAsset(id: number): Promise<void> {
+  return invoke("delete_fixed_asset", { id });
+}
+
+// ── 地代家賃内訳 ──
+
+export async function getRentDetails(): Promise<RentDetail[]> {
+  return invoke("get_rent_details");
+}
+
+export async function addRentDetail(params: {
+  payeeAddress: string;
+  payeeName: string;
+  rentType: string;
+  monthlyRent: number;
+  annualTotal: number;
+  businessRatio: number;
+  memo: string;
+}): Promise<number> {
+  return invoke("add_rent_detail", {
+    payee_address: params.payeeAddress,
+    payee_name: params.payeeName,
+    rent_type: params.rentType,
+    monthly_rent: params.monthlyRent,
+    annual_total: params.annualTotal,
+    business_ratio: params.businessRatio,
+    memo: params.memo,
+  });
+}
+
+export async function deleteRentDetail(id: number): Promise<void> {
+  return invoke("delete_rent_detail", { id });
+}
+
+// ── 青色申告決算書 ──
+
+export async function getFinalStatement(
+  year: number,
+): Promise<FinalStatement> {
+  return invoke("get_final_statement", { year });
 }
 
 // ── エクスポート ──

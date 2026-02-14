@@ -10,6 +10,8 @@ import AccountList from "./components/AccountList";
 import TrialBalance from "./components/TrialBalance";
 import ProfitLoss from "./components/ProfitLoss";
 import BalanceSheet from "./components/BalanceSheet";
+import FixedAssetList from "./components/FixedAssetList";
+import FinalStatement from "./components/FinalStatement";
 
 export default function App() {
   const [page, setPage] = useState<PageId>("journal");
@@ -90,6 +92,10 @@ export default function App() {
         return <ProfitLoss year={year} />;
       case "balance-sheet":
         return <BalanceSheet year={year} />;
+      case "fixed-assets":
+        return <FixedAssetList />;
+      case "final-statement":
+        return <FinalStatement year={year} />;
     }
   }
 

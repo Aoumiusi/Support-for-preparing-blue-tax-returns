@@ -71,10 +71,72 @@ export interface BalanceSheet {
   net_income: number;
 }
 
+// 固定資産
+export interface FixedAsset {
+  id: number;
+  name: string;
+  acquisition_date: string;
+  acquisition_cost: number;
+  useful_life: number;
+  depreciation_method: string;
+  depreciation_rate: number;
+  accumulated_dep: number;
+  memo: string;
+  is_active: boolean;
+}
+
+export interface DepreciationRow {
+  asset_id: number;
+  asset_name: string;
+  acquisition_date: string;
+  acquisition_cost: number;
+  depreciation_method: string;
+  useful_life: number;
+  depreciation_rate: number;
+  accumulated_dep_prev: number;
+  current_year_dep: number;
+  accumulated_dep_end: number;
+  book_value_end: number;
+}
+
+// 地代家賃内訳
+export interface RentDetail {
+  id: number;
+  payee_address: string;
+  payee_name: string;
+  rent_type: string;
+  monthly_rent: number;
+  annual_total: number;
+  business_ratio: number;
+  memo: string;
+}
+
+// 月別売上・仕入
+export interface MonthlySalesPurchase {
+  month: number;
+  sales: number;
+  purchases: number;
+}
+
+// 青色申告決算書（統合）
+export interface FinalStatement {
+  profit_loss: ProfitLoss;
+  monthly: MonthlySalesPurchase[];
+  annual_sales_total: number;
+  annual_purchases_total: number;
+  depreciation_rows: DepreciationRow[];
+  depreciation_total: number;
+  rent_details: RentDetail[];
+  rent_total: number;
+  balance_sheet: BalanceSheet;
+}
+
 // ナビゲーション
 export type PageId =
   | "journal"
   | "accounts"
   | "trial-balance"
   | "profit-loss"
-  | "balance-sheet";
+  | "balance-sheet"
+  | "fixed-assets"
+  | "final-statement";

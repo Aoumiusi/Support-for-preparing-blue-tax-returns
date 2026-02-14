@@ -114,6 +114,84 @@ pub fn get_balance_sheet(state: State<DbState>, year: i32) -> Result<BalanceShee
     db::calc_balance_sheet(&conn, year).map_err(|e| e.to_string())
 }
 
+// ── 固定資産 ──
+
+#[tauri::command]
+pub fn get_fixed_assets(state: State<DbState>) -> Result<Vec<FixedAsset>, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::fetch_fixed_assets(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_fixed_asset(
+    state: State<DbState>,
+    name: String,
+    acquisition_date: String,
+    acquisition_cost: i64,
+    useful_life: i32,
+    depreciation_method: String,
+    depreciation_rate: i32,
+    accumulated_dep: i64,
+    memo: String,
+) -> Result<i64, String> {
+    if acquisition_cost <= 0 {
+        return Err("取得価額は1円以上を入力してください".to_string());
+    }
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::insert_fixed_asset(
+        &conn, &name, &acquisition_date, acquisition_cost, useful_life,
+        &depreciation_method, depreciation_rate, accumulated_dep, &memo,
+    ).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_fixed_asset(state: State<DbState>, id: i64) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::delete_fixed_asset(&conn, id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── 地代家賃内訳 ──
+
+#[tauri::command]
+pub fn get_rent_details(state: State<DbState>) -> Result<Vec<RentDetail>, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::fetch_rent_details(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_rent_detail(
+    state: State<DbState>,
+    payee_address: String,
+    payee_name: String,
+    rent_type: String,
+    monthly_rent: i64,
+    annual_total: i64,
+    business_ratio: i32,
+    memo: String,
+) -> Result<i64, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::insert_rent_detail(
+        &conn, &payee_address, &payee_name, &rent_type,
+        monthly_rent, annual_total, business_ratio, &memo,
+    ).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_rent_detail(state: State<DbState>, id: i64) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::delete_rent_detail(&conn, id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── 青色申告決算書（統合） ──
+
+#[tauri::command]
+pub fn get_final_statement(state: State<DbState>, year: i32) -> Result<FinalStatement, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::calc_final_statement(&conn, year).map_err(|e| e.to_string())
+}
+
 // ── CSV エクスポート ──
 
 #[tauri::command]

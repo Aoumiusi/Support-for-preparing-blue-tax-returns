@@ -28,6 +28,13 @@ fn main() {
             commands::get_trial_balance,
             commands::get_profit_loss,
             commands::get_balance_sheet,
+            commands::get_fixed_assets,
+            commands::add_fixed_asset,
+            commands::delete_fixed_asset,
+            commands::get_rent_details,
+            commands::add_rent_detail,
+            commands::delete_rent_detail,
+            commands::get_final_statement,
             commands::export_journal_csv,
             commands::backup_database,
         ])
