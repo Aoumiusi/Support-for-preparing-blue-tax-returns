@@ -9,6 +9,7 @@ mod models;
 
 use commands::DbState;
 use std::sync::Mutex;
+use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()

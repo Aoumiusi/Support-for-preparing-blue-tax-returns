@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { LossCarryforward, LossCarryforwardSummary } from "../types";
-import { formatYen, currentYear } from "../lib/format";
+import { formatYen } from "../lib/format";
 import * as api from "../lib/api";
 
 interface Props {
