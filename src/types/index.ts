@@ -161,6 +161,7 @@ export interface FinalStatement {
 // ナビゲーション
 export type PageId =
   | "journal"
+  | "simple-entry"
   | "accounts"
   | "trial-balance"
   | "profit-loss"
