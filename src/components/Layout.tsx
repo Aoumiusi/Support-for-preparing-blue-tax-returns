@@ -11,6 +11,7 @@ const navSections: NavSection[] = [
     title: "記帳",
     items: [
       { id: "journal", label: "仕訳帳" },
+      { id: "simple-entry", label: "かんたん入力" },
       { id: "accounts", label: "勘定科目" },
       { id: "fixed-assets", label: "固定資産台帳" },
       { id: "rent-details", label: "地代家賃内訳" },

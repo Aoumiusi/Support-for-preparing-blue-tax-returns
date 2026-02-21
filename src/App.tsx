@@ -6,6 +6,7 @@ import * as api from "./lib/api";
 import Layout from "./components/Layout";
 import JournalEntryForm from "./components/JournalEntryForm";
 import JournalEntryList from "./components/JournalEntryList";
+import SimpleEntryForm from "./components/SimpleEntryForm";
 import AccountList from "./components/AccountList";
 import TrialBalance from "./components/TrialBalance";
 import ProfitLoss from "./components/ProfitLoss";
@@ -85,6 +86,10 @@ export default function App() {
               onExportCsv={handleExportCsv}
             />
           </div>
+        );
+      case "simple-entry":
+        return (
+          <SimpleEntryForm accounts={accounts} onSaved={loadEntries} />
         );
       case "accounts":
         return <AccountList accounts={accounts} onAdded={loadAccounts} />;
